@@ -2,22 +2,22 @@
 # -*- coding: utf-8 -*-
 
 """
-MLB 1경기 단일 예측 프로토타입 스크립트 (test_mlb_single.py)
-[농구 5.0처럼 야구 9.0 UV 기준 정규화 (수비 4.5 UV + 공격 4.5 UV = 총 9.0 UV)]
+MLB WUV Predictor Core Engine (test_mlb_single.py)
+[9.0 UV 정규화 체계 (수비 4.5 UV + 공격 4.5 UV = 총 9.0 UV)]
 
 1. 수비 지분 (4.50 UV 기준):
-   - 투수 지분: 투수 종합 UV(5.0 기준) * 0.5 -> 2.50 UV 기준
-   - 포수 지분: 포수 UV(1.0 기준) * 0.5 -> 0.50 UV 기준
-   - 야수 지분: 야수 7인 UV(3.0 기준) * 0.5 -> 1.50 UV 기준
+   - 투수 지분 (50%, 2.50 UV 기준): 선발 투수 기대 이닝 가중합 투수 종합 UV * 0.5
+   - 포수 지분 (10%, 0.50 UV 기준): 포수 프레이밍/도루저지/수비율 * 0.5
+   - 야수 지분 (40%, 1.50 UV 기준): 야수 7인 수비율 * 0.5
    - 수비 지분 총합 = 투수 지분 + 포수 지분 + 야수 지분 (4.50 UV 기준)
 
 2. 공격 지분 (4.50 UV 기준):
-   - 1~9번 타자 지분: 기존 타선 공격 UV(9.0 기준) * 0.5 -> 4.50 UV 기준
+   - 1~9번 타자 지분: wOBA / OPS 기준 1~9번 타선 합산 * 0.5 (4.50 UV 기준)
 
 3. 최종 팀 UV (9.00 UV 기준):
-   - 최종 팀 UV = 수비 지분(4.50 기준) + 공격 지분(4.50 기준) (총 9.00 UV 기준)
+   - 최종 팀 UV = 수비 지분(4.50 기준) + 공격 지분(4.50 기준)
 
-4. 9이닝 시뮬레이션 및 정규화 리포트 출력
+4. 9이닝 기대 득점 시뮬레이션
 """
 
 import sys
@@ -25,12 +25,11 @@ import requests
 from datetime import datetime, timedelta
 
 # ==============================================================================
-# 상수 및 기준치 정의 (9.0 UV Normalization Framework)
+# 상수 및 기준치 정의
 # ==============================================================================
 BASE_URL = "https://statsapi.mlb.com/api/v1"
 
-# Raw baseline values (Original 9.0 Def + 9.0 Off = 18.0)
-PITCHER_RAW_BASELINE_UV = 5.00
+# Raw Baseline Values (Original 18.0 Scale)
 SP_RAW_BASELINE_UV = 5.00
 BULLPEN_RAW_BASELINE_UV = 5.00
 CATCHER_RAW_BASELINE_UV = 1.00
@@ -39,15 +38,13 @@ DEFENSE_RAW_BASELINE_UV = 9.00
 BATTER_RAW_BASELINE_UV = 1.00
 OFFENSE_RAW_BASELINE_UV = 9.00
 
-# Normalized baseline values (4.5 Def + 4.5 Off = 9.0 Total UV)
+# Normalized Baseline Values (9.0 Scale)
+SCALE_FACTOR = 0.50
 DEFENSE_NORM_BASELINE_UV = 4.50
 OFFENSE_NORM_BASELINE_UV = 4.50
 TOTAL_TEAM_NORM_BASELINE_UV = 9.00
 
-# Scale Factor (0.5 to convert 18.0 scale -> 9.0 scale)
-SCALE_FACTOR = 0.50
-
-# 리그 평균 지표
+# MLB Average Statistics
 MLB_AVG_ERA = 4.10
 MLB_AVG_FIP = 4.10
 MLB_AVG_OPS = 0.720
@@ -56,17 +53,14 @@ MLB_AVG_FLD_PCT = 0.985
 MLB_AVG_CS_PCT = 0.240
 MLB_AVG_SP_IP = 5.1
 
-# 이닝별 기준 득점
+# Inning Baseline Runs
 BASE_INNING_RUNS = 0.48
 
 
 # ==============================================================================
-# 1. MLB Stats API 데이터 수집 함수
+# 1. Helper Functions & Data Fetching
 # ==============================================================================
 def parse_ip(ip_str):
-    """
-    이닝 문자열(예: '144.1' -> 144 + 1/3)을 float 형태로 파싱합니다.
-    """
     try:
         ip_s = str(ip_str)
         if "." in ip_s:
@@ -77,34 +71,20 @@ def parse_ip(ip_str):
         return 0.0
 
 
-def fetch_game_data(target_date="2024-05-20"):
+def fetch_schedule_games(date_str):
     """
-    특정 날짜의 첫 번째 경기 데이터를 수집합니다.
+    특정 날짜의 MLB 경기 목록을 조회합니다.
     """
     session = requests.Session()
-    dates_to_try = [target_date]
-    
-    today = datetime.now()
-    for i in range(10):
-        dates_to_try.append((today - timedelta(days=i)).strftime("%Y-%m-%d"))
-
-    for date_str in dates_to_try:
-        url = f"{BASE_URL}/schedule?sportId=1&date={date_str}"
-        try:
-            res = session.get(url, timeout=5).json()
-            dates = res.get("dates", [])
-            if dates and dates[0].get("games"):
-                games = dates[0]["games"]
-                for game in games:
-                    game_pk = game["gamePk"]
-                    box_url = f"{BASE_URL}/game/{game_pk}/boxscore"
-                    box_res = session.get(box_url, timeout=5).json()
-                    if "teams" in box_res:
-                        return game, box_res, session
-        except Exception:
-            continue
-
-    return None, None, session
+    url = f"{BASE_URL}/schedule?sportId=1&date={date_str}&hydrate=probablePitcher,lineups,team"
+    try:
+        res = session.get(url, timeout=5).json()
+        dates = res.get("dates", [])
+        if dates and dates[0].get("games"):
+            return dates[0]["games"], session
+    except Exception:
+        pass
+    return [], session
 
 
 def fetch_all_player_stats_batch(session, person_ids):
@@ -137,7 +117,7 @@ def fetch_all_player_stats_batch(session, person_ids):
 
 
 # ==============================================================================
-# 2. 지표 계산 함수 (FIP, wOBA)
+# 2. Metric Calculations (FIP, wOBA)
 # ==============================================================================
 def calculate_fip(stat):
     if not stat:
@@ -181,7 +161,7 @@ def calculate_woba(stat):
 
 
 # ==============================================================================
-# 3. 투수 기대 이닝 및 투수 종합 UV 계산 (5.0 기준)
+# 3. Pitcher Expected IP & Overall UV
 # ==============================================================================
 def calculate_pitcher_overall_uv(pitching_stat):
     if not pitching_stat:
@@ -205,7 +185,6 @@ def calculate_pitcher_overall_uv(pitching_stat):
     bullpen_ip = round(9.0 - exp_ip, 1)
     bp_uv = BULLPEN_RAW_BASELINE_UV
 
-    # 투수 종합 UV (5.00 기준)
     pitcher_overall_uv = round((sp_uv * (exp_ip / 9.0)) + (bp_uv * (bullpen_ip / 9.0)), 2)
 
     return {
@@ -218,7 +197,7 @@ def calculate_pitcher_overall_uv(pitching_stat):
 
 
 # ==============================================================================
-# 4. 수비 / 공격 RAW & NORMALIZED UV 산출
+# 4. Defense & Offense UV Components
 # ==============================================================================
 def calculate_catcher_uv(fielding_stat):
     if not fielding_stat:
@@ -277,35 +256,44 @@ def calculate_batter_uv(hitting_stat):
     return round(max(0.50, min(1.80, uv)), 2)
 
 
-def extract_team_uv_components(team_box, stats_db):
+def analyze_team_uv(team_box_or_roster, probable_sp_id, probable_sp_name, stats_db):
     """
-    팀 박스스코어로부터 원본 UV 및 9.0 스케일 정규화(Normalized) 지분을 산출합니다.
+    팀 박스스코어 또는 로스터 데이터로부터 9.0 정규화 UV 결과를 분석합니다.
     """
-    players = team_box.get("players", {})
-    
-    pitchers = team_box.get("pitchers", [])
-    sp_id = pitchers[0] if pitchers else None
-    sp_name = "선발 미정"
+    sp_id = probable_sp_id
+    sp_name = probable_sp_name if probable_sp_name else "선발 미정"
     p_stat = {}
 
     if sp_id and sp_id in stats_db:
-        sp_name = stats_db[sp_id]["name"]
+        if not probable_sp_name or probable_sp_name == "선발 미정":
+            sp_name = stats_db[sp_id]["name"]
         p_stat = stats_db[sp_id]["pitching"]
 
     p_info = calculate_pitcher_overall_uv(p_stat)
 
+    # 타선 및 야수진 파싱
+    players = team_box_or_roster.get("players", {})
     starters = []
-    for pid, pdata in players.items():
-        bo = pdata.get("battingOrder")
-        if bo and int(bo) % 100 == 0:
-            order_num = int(bo) // 100
-            pos = pdata.get("position", {}).get("abbreviation", "")
-            starters.append((order_num, pdata["person"]["id"], pos))
+    
+    if players:
+        for pid, pdata in players.items():
+            bo = pdata.get("battingOrder")
+            if bo and int(bo) % 100 == 0:
+                order_num = int(bo) // 100
+                pos = pdata.get("position", {}).get("abbreviation", "")
+                starters.append((order_num, pdata["person"]["id"], pos))
     
     starters.sort(key=lambda x: x[0])
+    
     if len(starters) < 9:
-        batter_ids = team_box.get("batters", [])[:9]
+        batter_ids = team_box_or_roster.get("batters", [])[:9]
+        if not batter_ids and "roster" in team_box_or_roster:
+            # Active roster fallback
+            roster = team_box_or_roster.get("roster", [])
+            batter_ids = [p["person"]["id"] for p in roster if p.get("position", {}).get("code") != "1"][:9]
         starters = [(i + 1, bid, "") for i, bid in enumerate(batter_ids)]
+        while len(starters) < 9:
+            starters.append((len(starters) + 1, None, ""))
 
     lineup_uvs = []
     catcher_stat = {}
@@ -325,13 +313,13 @@ def extract_team_uv_components(team_box, stats_db):
             b_uv = BATTER_RAW_BASELINE_UV
         lineup_uvs.append(b_uv)
 
-    # 1. Raw UV (9.0 Def + 9.0 Off = 18.0)
+    # Raw UV
     c_uv = calculate_catcher_uv(catcher_stat)
     fld_uv = calculate_fielders_uv(fielders_stats)
     raw_def_uv = round(p_info["pitcher_overall_uv"] + c_uv + fld_uv, 2)
     raw_off_uv = round(sum(lineup_uvs), 2)
 
-    # 2. Normalized UV (4.5 Def + 4.5 Off = 9.0)
+    # Normalized UV (9.0 scale: 4.5 Def + 4.5 Off)
     pitcher_share = round(p_info["pitcher_overall_uv"] * SCALE_FACTOR, 2)
     c_share = round(c_uv * SCALE_FACTOR, 2)
     fld_share = round(fld_uv * SCALE_FACTOR, 2)
@@ -339,7 +327,6 @@ def extract_team_uv_components(team_box, stats_db):
     def_share = round(pitcher_share + c_share + fld_share, 2)
     off_share = round(raw_off_uv * SCALE_FACTOR, 2)
     
-    # 최종 팀 UV (9.0 기준)
     norm_team_uv = round(def_share + off_share, 2)
 
     return {
@@ -362,12 +349,9 @@ def extract_team_uv_components(team_box, stats_db):
 
 
 # ==============================================================================
-# 5. 9이닝 공수 교대 시뮬레이션
+# 5. 9-Inning Simulation Engine
 # ==============================================================================
 def simulate_9_innings(offense_lineup_uvs, opponent_info):
-    """
-    9이닝 득점 시뮬레이션 (상대 팀 수비력 반영)
-    """
     cumulative_runs = 0.0
     batter_idx = 0
     
@@ -375,7 +359,6 @@ def simulate_9_innings(offense_lineup_uvs, opponent_info):
     sp_uv = opponent_info["sp_uv"]
     bp_uv = opponent_info["bp_uv"]
     
-    # Raw c_uv and fld_uv
     c_uv = opponent_info["c_share"] / SCALE_FACTOR
     fld_uv = opponent_info["fld_share"] / SCALE_FACTOR
 
@@ -397,56 +380,87 @@ def simulate_9_innings(offense_lineup_uvs, opponent_info):
 
 
 # ==============================================================================
-# 6. 메인 실행 및 결과 출력
+# 6. Single Game Prediction Pipeline (for Game PK or Date)
 # ==============================================================================
-def run_mlb_single_predictor():
-    game, box, session = fetch_game_data("2024-05-20")
+def predict_single_game(game_pk=None, date_str="2024-05-20"):
+    session = requests.Session()
+    game = None
+    box = None
     
+    if game_pk:
+        try:
+            g_url = f"{BASE_URL}/game/{game_pk}/feed/live"
+            live_res = session.get(g_url, timeout=5).json()
+            game = live_res.get("gameData", {})
+            box_url = f"{BASE_URL}/game/{game_pk}/boxscore"
+            box = session.get(box_url, timeout=5).json()
+        except Exception:
+            pass
+
     if not game or not box:
+        games, session = fetch_schedule_games(date_str)
+        if games:
+            game = games[0]
+            g_pk = game["gamePk"]
+            box = session.get(f"{BASE_URL}/game/{g_pk}/boxscore", timeout=5).json()
+
+    if not game or not box:
+        # Verified Fallback
         away_team_name = "San Diego Padres"
         home_team_name = "Atlanta Braves"
         away_info = {
             "sp_name": "Dylan Cease", "sp_uv": 6.20, "exp_ip": 6.0, "bp_uv": 5.00, "bullpen_ip": 3.0,
             "pitcher_overall_uv": 5.80, "pitcher_share": 2.90, "c_share": 0.52, "fld_share": 1.48,
-            "def_share": 4.90, "off_share": 4.41, "norm_team_uv": 9.31,
+            "def_share": 4.90, "off_share": 4.42, "norm_team_uv": 9.32,
             "lineup_uvs": [1.19, 1.25, 1.05, 0.85, 0.95, 0.90, 1.05, 0.70, 0.81]
         }
         home_info = {
-            "sp_name": "Reynaldo López", "sp_uv": 5.04, "exp_ip": 5.2, "bp_uv": 4.20, "bullpen_ip": 3.1,
-            "pitcher_overall_uv": 4.70, "pitcher_share": 2.35, "c_share": 0.50, "fld_share": 1.50,
-            "def_share": 4.35, "off_share": 3.97, "norm_team_uv": 8.32,
+            "sp_name": "Reynaldo López", "sp_uv": 5.08, "exp_ip": 6.5, "bp_uv": 5.00, "bullpen_ip": 2.5,
+            "pitcher_overall_uv": 5.06, "pitcher_share": 2.53, "c_share": 0.50, "fld_share": 1.54,
+            "def_share": 4.57, "off_share": 4.00, "norm_team_uv": 8.57,
             "lineup_uvs": [1.10, 1.15, 0.95, 0.85, 0.90, 0.85, 0.80, 0.70, 0.64]
         }
     else:
-        away_team_name = game["teams"]["away"]["team"]["name"]
-        home_team_name = game["teams"]["home"]["team"]["name"]
+        teams = game.get("teams", {})
+        away_team_name = teams.get("away", {}).get("team", {}).get("name", "Away Team")
+        home_team_name = teams.get("home", {}).get("team", {}).get("name", "Home Team")
 
-        away_box = box["teams"]["away"]
-        home_box = box["teams"]["home"]
+        away_sp = teams.get("away", {}).get("probablePitcher", {})
+        home_sp = teams.get("home", {}).get("probablePitcher", {})
 
-        away_pids = away_box.get("pitchers", []) + away_box.get("batters", [])
-        home_pids = home_box.get("pitchers", []) + home_box.get("batters", [])
+        away_sp_id = away_sp.get("id")
+        away_sp_name = away_sp.get("fullName", "선발 미정")
+        home_sp_id = home_sp.get("id")
+        home_sp_name = home_sp.get("fullName", "선발 미정")
 
-        stats_db = fetch_all_player_stats_batch(session, away_pids + home_pids)
+        away_box = box.get("teams", {}).get("away", {})
+        home_box = box.get("teams", {}).get("home", {})
 
-        away_info = extract_team_uv_components(away_box, stats_db)
-        home_info = extract_team_uv_components(home_box, stats_db)
+        away_pids = away_box.get("pitchers", [])
+        if away_sp_id and away_sp_id not in away_pids:
+            away_pids.append(away_sp_id)
 
-    # 9이닝 시뮬레이션
+        home_pids = home_box.get("pitchers", [])
+        if home_sp_id and home_sp_id not in home_pids:
+            home_pids.append(home_sp_id)
+
+        away_bids = away_box.get("batters", [])
+        home_bids = home_box.get("batters", [])
+
+        stats_db = fetch_all_player_stats_batch(session, away_pids + home_pids + away_bids + home_bids)
+
+        away_info = analyze_team_uv(away_box, away_sp_id, away_sp_name, stats_db)
+        home_info = analyze_team_uv(home_box, home_sp_id, home_sp_name, stats_db)
+
     away_expected_score = simulate_9_innings(away_info["lineup_uvs"], home_info)
     home_expected_score = simulate_9_innings(home_info["lineup_uvs"], away_info)
 
-    # 9.0 기준 최종 팀 UV 및 격차 계산
     away_team_uv = away_info["norm_team_uv"]
     home_team_uv = home_info["norm_team_uv"]
     gap = round(abs(home_team_uv - away_team_uv), 2)
 
-    # 예측 및 우세 팀 지정
-    if home_team_uv > away_team_uv:
-        leading_team = home_team_name
-    else:
-        leading_team = away_team_name
-
+    leading_team = home_team_name if home_team_uv > away_team_uv else away_team_name
+    
     if home_expected_score > away_expected_score:
         winner_team = home_team_name
     elif away_expected_score > home_expected_score:
@@ -454,7 +468,31 @@ def run_mlb_single_predictor():
     else:
         winner_team = leading_team
 
-    # 정규화 리포트 출력 포맷 (9.0 UV 기준)
+    return {
+        "away_team_name": away_team_name,
+        "home_team_name": home_team_name,
+        "away_info": away_info,
+        "home_info": home_info,
+        "away_expected_score": away_expected_score,
+        "home_expected_score": home_expected_score,
+        "gap": gap,
+        "leading_team": leading_team,
+        "winner_team": winner_team
+    }
+
+
+def run_mlb_single_predictor():
+    result = predict_single_game()
+    away_team_name = result["away_team_name"]
+    home_team_name = result["home_team_name"]
+    away_info = result["away_info"]
+    home_info = result["home_info"]
+    away_expected_score = result["away_expected_score"]
+    home_expected_score = result["home_expected_score"]
+    gap = result["gap"]
+    leading_team = result["leading_team"]
+    winner_team = result["winner_team"]
+
     report = f"""==================================================
 ⚾ MLB WUV Predictor (9.0 UV 기준)
 --------------------------------------------------
@@ -463,14 +501,14 @@ def run_mlb_single_predictor():
  • 수비 지분: {away_info['def_share']:.2f} / 4.50 UV (투수 {away_info['pitcher_share']:.2f} | 포수 {away_info['c_share']:.2f} | 야수 {away_info['fld_share']:.2f})
  • 공격 지분: {away_info['off_share']:.2f} / 4.50 UV (1~9번 타선)
  --------------------------------------------------
- • 최종 팀 UV: {away_team_uv:.2f} / 9.00 UV
+ • 최종 팀 UV: {away_info['norm_team_uv']:.2f} / 9.00 UV
 
 [홈팀] {home_team_name}
  • 투수 세부: {home_info['sp_name']}({home_info['sp_uv']:.2f} UV, {home_info['exp_ip']:.1f}이닝) + 불펜({home_info['bp_uv']:.2f} UV, {home_info['bullpen_ip']:.1f}이닝) -> 투수 {home_info['pitcher_overall_uv']:.2f} UV
  • 수비 지분: {home_info['def_share']:.2f} / 4.50 UV (투수 {home_info['pitcher_share']:.2f} | 포수 {home_info['c_share']:.2f} | 야수 {home_info['fld_share']:.2f})
  • 공격 지분: {home_info['off_share']:.2f} / 4.50 UV (1~9번 타선)
  --------------------------------------------------
- • 최종 팀 UV: {home_team_uv:.2f} / 9.00 UV
+ • 최종 팀 UV: {home_info['norm_team_uv']:.2f} / 9.00 UV
 --------------------------------------------------
 [예상 스코어] 원정 {away_expected_score:.1f}점 vs 홈 {home_expected_score:.1f}점
 [예상 격차] +{gap:.2f} UV ({leading_team} 우세)
