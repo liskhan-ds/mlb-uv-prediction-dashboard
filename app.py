@@ -1,192 +1,241 @@
 import streamlit as st
+import sqlite3
 import pandas as pd
-import requests
-from datetime import datetime, timedelta
-import test_mlb_single as mlb_engine
+import altair as alt
+import os
+from datetime import datetime
 
-# ==============================================================================
-# 1. 페이지 기본 설정
-# ==============================================================================
-st.set_page_config(
-    page_title="MLB WUV Game Predictor (9.0 UV 기준)",
-    page_icon="⚾",
-    layout="wide"
-)
+# -----------------------------------------------------------------------------
+# 1. 설정 및 데이터 로드
+# -----------------------------------------------------------------------------
+st.set_page_config(page_title="MLB AI 승부예측", page_icon="⚾", layout="wide")
 
-# ==============================================================================
-# 2. 상단 네비게이션
-# ==============================================================================
-col_nav1, col_nav2, _ = st.columns([2, 2, 6])
-with col_nav1:
+# 실행 경로와 관계없이 DB를 찾을 수 있도록 절대 경로 설정
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(BASE_DIR, "mlb_data.db")
+
+def load_data():
+    if os.path.exists(DB_PATH):
+        try:
+            conn = sqlite3.connect(DB_PATH)
+            query = "SELECT * FROM predictions ORDER BY date ASC, rowid ASC"
+            df = pd.read_sql(query, conn)
+            conn.close()
+            if not df.empty:
+                return df
+        except Exception:
+            pass
+            
+    # 검증 경기 기본 데이터: San Diego Padres (9.32 UV) vs Atlanta Braves (8.57 UV)
+    data = [{
+        "date": "2024-05-20",
+        "home_team": "Atlanta Braves",
+        "visit_team": "San Diego Padres",
+        "predicted_winner": "San Diego Padres",
+        "predicted_gap": 0.75,
+        "home_uv": 8.57,
+        "visit_uv": 9.32,
+        "actual_winner": "San Diego Padres",
+        "is_correct": 1
+    }]
+    return pd.DataFrame(data)
+
+df = load_data()
+
+# 상단 탭 네비게이션
+nav_col1, nav_col2, _ = st.columns([2, 3, 5])
+with nav_col1:
+    st.button("⚾ MLB 대시보드 (현재)", disabled=True)
+with nav_col2:
     st.link_button(
-        "🏀 NBA 대시보드 이동",
-        "https://nba-uv-prediction-dashboard-6ahdkhmixcsa3uybaz6ez6.streamlit.app/",
-        use_container_width=True
+        "🏀 NBA 대시보드 바로가기 ↗", 
+        "https://nba-uv-prediction-dashboard-6ahdkhmixcsa3uybaz6ez6.streamlit.app/"
     )
-with col_nav2:
-    st.button("⚾ MLB 대시보드 (현재)", disabled=True, use_container_width=True)
 
 st.divider()
 
-# 메인 타이틀 및 설명
-st.title("⚾ MLB WUV Game Predictor (9.0 UV 기준)")
-st.caption("실시간 MLB 일정 및 9.0 WUV 정규화 모델(수비 4.5 + 공격 4.5) 기반 승부 예측 대시보드")
+# 타이틀 및 본문 설명
+st.title("⚾ MLB AI 승부예측 (by 9.0 WUV predictor)")
+st.caption("9.0 WUV 기준 (수비 4.5 UV + 공격 4.5 UV) | 야구 라인업 (선발/불펜 투수 + 1~9번 타선)")
 
-st.write("")
+# -----------------------------------------------------------------------------
+# [로직] 적중률 계산 및 넘버링 필터링
+# -----------------------------------------------------------------------------
+df['total_no'] = None
+valid_mask = df['actual_winner'] != 'Postponed'
+df.loc[valid_mask, 'total_no'] = range(1, len(df[valid_mask]) + 1)
+df['total_no'] = df['total_no'].fillna('취소')
 
-# ==============================================================================
-# 3. 일정 및 경기 데이터 연동 (Cache 적용)
-# ==============================================================================
-@st.cache_data(ttl=1800)
-def load_schedule(date_str):
-    url = f"https://statsapi.mlb.com/api/v1/schedule?sportId=1&date={date_str}&hydrate=probablePitcher,lineups,team"
-    try:
-        res = requests.get(url, timeout=5).json()
-        dates = res.get("dates", [])
-        if dates and dates[0].get("games"):
-            return dates[0]["games"]
-    except Exception:
-        pass
-    return []
+stats_df = df[
+    (df['actual_winner'] != 'Postponed') & 
+    (df['actual_winner'].notna()) & 
+    (df['actual_winner'] != '')
+].copy()
 
+# -----------------------------------------------------------------------------
+# 1. [상단] 누적 예측 성적표 & 100경기 트래킹
+# -----------------------------------------------------------------------------
+st.header("📊 누적 예측 성적표")
+total_stats = len(stats_df)
+correct_total = stats_df['is_correct'].sum()
 
-# 경기 날짜 선택 (기본값: 내일 날짜)
-tomorrow_date = datetime.now() + timedelta(days=1)
-selected_date = st.date_input("🗓️ 경기 날짜 선택", value=tomorrow_date)
-date_str = selected_date.strftime("%Y-%m-%d")
+col_acc, col_track = st.columns([2, 1])
 
-games = load_schedule(date_str)
-
-if not games:
-    st.warning(f"⚠️ 선택하신 날짜({date_str})에는 예정된 MLB 경기가 없거나 조회가 불가능합니다. 검증 데이터(SD vs ATL)로 결과를 표시합니다.")
-    game_options = ["SD @ ATL (검증 경기 - 2024-05-20)"]
-    selected_game_pk = None
+if total_stats > 0:
+    total_acc = (correct_total / total_stats) * 100
+    status_suffix = " (⚡ 신계, 시장 왜곡급)" if total_acc >= 60 else ""
+    
+    with col_acc:
+        st.subheader(f"전체 예측률: `{total_acc:.2f}%`{status_suffix}")
+        st.markdown(f"**적중 경기 수:** {int(correct_total)} / **통산 경기 수:** {total_stats}")
+    
+    with col_track:
+        remaining = 100 - total_stats
+        if remaining > 0:
+            st.metric("100경기 시스템 검증까지", f"{remaining}경기 남음")
+        else:
+            st.metric("시스템 검증 상태", "검증 완료 (신계 등급)")
 else:
-    game_options = []
-    game_pk_map = {}
-    for idx, g in enumerate(games, 1):
-        away_name = g.get("teams", {}).get("away", {}).get("team", {}).get("name", "원정팀")
-        home_name = g.get("teams", {}).get("home", {}).get("team", {}).get("name", "홈팀")
-        
-        away_sp = g.get("teams", {}).get("away", {}).get("probablePitcher", {}).get("fullName", "선발 미정")
-        home_sp = g.get("teams", {}).get("home", {}).get("probablePitcher", {}).get("fullName", "선발 미정")
-
-        g_time_raw = g.get("gameDate", "")
-        time_label = ""
-        if g_time_raw:
-            try:
-                dt = datetime.strptime(g_time_raw, "%Y-%m-%dT%H:%M:%SZ")
-                kst_dt = dt + timedelta(hours=9)
-                time_label = kst_dt.strftime("%H:%M KST")
-            except Exception:
-                time_label = g_time_raw
-
-        label = f"[{idx}] {away_name} ({away_sp}) @ {home_name} ({home_sp}) - {time_label}"
-        game_options.append(label)
-        game_pk_map[label] = g.get("gamePk")
-
-    selected_label = st.selectbox("⚾ 내일/선택 경기 매치업 선택", game_options)
-    selected_game_pk = game_pk_map.get(selected_label)
+    st.subheader("데이터 수집 중...")
 
 st.markdown("---")
 
-# ==============================================================================
-# 4. 9.0 WUV 예측 엔진 실행 및 결과 시각화
-# ==============================================================================
-@st.cache_data(ttl=1800)
-def get_prediction_result(game_pk, date_str):
-    return mlb_engine.predict_single_game(game_pk=game_pk, date_str=date_str)
+# -----------------------------------------------------------------------------
+# 2. [중단] 일별 예측 성적표 (6단계 등급 및 라벨)
+# -----------------------------------------------------------------------------
+st.header("📈 일별 예측 성적표 (최근 7일)")
 
+if not stats_df.empty:
+    daily_stats = stats_df.groupby('date').agg(
+        total_games=('home_team', 'count'), 
+        correct_games=('is_correct', 'sum') 
+    ).reset_index()
 
-with st.spinner("9.0 WUV 예측 엔진 계산 중..."):
-    res = get_prediction_result(selected_game_pk, date_str)
+    daily_stats['accuracy'] = (daily_stats['correct_games'] / daily_stats['total_games']) * 100
+    
+    def get_bar_color(acc):
+        if acc >= 60: return '#A020F0'      # 보라 (신계)
+        elif acc >= 55: return '#FF0000'    # 빨강 (초고수/AI)
+        elif acc >= 52.4: return '#FFA500'  # 주황 (프로/고수)
+        elif acc >= 45: return '#1E90FF'    # 파랑 (노력하는 일반인)
+        elif acc >= 35: return '#008000'    # 녹색 (지극히 정상인)
+        else: return '#808080'             # 회색 (예측 금지)
 
-away_team = res["away_team_name"]
-home_team = res["home_team_name"]
-away_info = res["away_info"]
-home_info = res["home_info"]
-away_score = res["away_expected_score"]
-home_score = res["home_expected_score"]
-gap = res["gap"]
-leading_team = res["leading_team"]
-winner_team = res["winner_team"]
-
-# 최종 예측 요약 카드
-st.subheader(f"🔥 매치업 예측 리포트: {away_team} (원정) vs {home_team} (홈)")
-
-st.markdown("#### 🏆 최종 예측 요약")
-col_res1, col_res2, col_res3 = st.columns(3)
-
-with col_res1:
-    st.metric(
-        label="예측 승리팀",
-        value=winner_team,
-        delta=f"{winner_team} 승리 예상"
+    daily_stats['bar_color'] = daily_stats['accuracy'].apply(get_bar_color)
+    
+    daily_stats['label_text'] = daily_stats.apply(
+        lambda x: f"{int(x['correct_games'])}/{int(x['total_games'])}", 
+        axis=1
     )
-with col_res2:
-    st.metric(
-        label="예상 스코어",
-        value=f"{away_score:.1f} : {home_score:.1f}",
-        delta=f"{away_team} {away_score:.1f}점 vs {home_team} {home_score:.1f}점"
+
+    daily_stats_7d = daily_stats.sort_values('date', ascending=True).tail(7)
+
+    base = alt.Chart(daily_stats_7d).encode(x=alt.X('date', title='날짜(MLB 현지)'))
+    bars = base.mark_bar().encode(
+        y=alt.Y('accuracy', title='적중률(%)', scale=alt.Scale(domain=[0, 110])),
+        color=alt.Color('bar_color', scale=None),
+        tooltip=['date', 'accuracy', 'total_games']
     )
-with col_res3:
-    st.metric(
-        label="UV 전력 격차 (ΔUV)",
-        value=f"+{gap:.2f} UV",
-        delta=f"{leading_team} 우세"
+    text = base.mark_text(align='center', baseline='bottom', dy=-5, fontSize=14, fontWeight='bold').encode(
+        y='accuracy', text='label_text'
     )
+    st.altair_chart((bars + text).properties(height=350), width="stretch")
+else:
+    st.info("통계를 표시할 수 있는 종료된 경기가 아직 없습니다.")
+
+# 6단계 등급 범례 하단 표시
+st.markdown("""
+<div style="text-align: center; padding: 12px; background-color: #f0f2f6; border-radius: 10px; line-height: 1.6;">
+    <span style="color: #A020F0;">●</span> <b>신계</b> (60%↑) &nbsp;&nbsp;
+    <span style="color: #FF0000;">●</span> <b>초고수/AI</b> (55%~60%) &nbsp;&nbsp;
+    <span style="color: #FFA500;">●</span> <b>프로/고수</b> (52.4%~55%) &nbsp;&nbsp;
+    <span style="color: #1E90FF;">●</span> <b>노력하는 일반인</b> (45%~52.4%) &nbsp;&nbsp;
+    <span style="color: #008000;">●</span> <b>지극히 정상인</b> (35%~45%) &nbsp;&nbsp;
+    <span style="color: #808080;">●</span> <b>예측 금지</b> (35%↓)
+    <br><small>* 52.4%는 통계적 손익분기점(Breakeven) 기준입니다.</small>
+</div>
+""", unsafe_allow_html=True)
 
 st.markdown("---")
 
-# 양 팀 공/수 세부 지분 비교
-st.markdown("#### 📊 양 팀 9.0 WUV 공/수 지분 상세 비교")
+# -----------------------------------------------------------------------------
+# 3. [하단] 일별 상세 예측 리포트 & 검증 매치업 상세
+# -----------------------------------------------------------------------------
+st.header("📋 일별 상세 예측 리포트")
 
-col_away, col_home = st.columns(2)
+df['date_dt'] = pd.to_datetime(df['date']).dt.date
+unique_dates = sorted(df['date_dt'].unique(), reverse=True)
 
-with col_away:
-    st.markdown(f"### ✈️ 원정팀: {away_team}")
-    st.info(f"**최종 팀 UV:** `{away_info['norm_team_uv']:.2f} / 9.00 UV`")
-    
-    st.markdown(f"#### 🛡️ 수비 지분: `{away_info['def_share']:.2f} / 4.50 UV`")
-    st.write(f"- **투수 지분 (50%):** `{away_info['pitcher_share']:.2f} UV`")
-    st.write(f"- **포수 지분 (10%):** `{away_info['c_share']:.2f} UV`")
-    st.write(f"- **야수 7인 지분 (40%):** `{away_info['fld_share']:.2f} UV`")
-    st.caption(
-        f"⚾ **투수 세부:** {away_info['sp_name']} ({away_info['sp_uv']:.2f} UV, {away_info['exp_ip']:.1f}이닝) + "
-        f"불펜 ({away_info['bp_uv']:.2f} UV, {away_info['bullpen_ip']:.1f}이닝) -> 종합 투수 {away_info['pitcher_overall_uv']:.2f} UV"
-    )
-    
-    st.markdown(f"#### ⚔️ 공격 지분: `{away_info['off_share']:.2f} / 4.50 UV`")
-    st.write(f"- **1~9번 타선 지분:** `{away_info['off_share']:.2f} UV` (wOBA / OPS 기반 4.50 정규화)")
+selected_date = st.date_input("확인하고 싶은 날짜를 선택하세요:", value=unique_dates[0])
+filtered_df = df[df['date_dt'] == selected_date].copy().reset_index(drop=True)
 
-with col_home:
-    st.markdown(f"### 🏠 홈팀: {home_team}")
-    st.success(f"**최종 팀 UV:** `{home_info['norm_team_uv']:.2f} / 9.00 UV`")
-    
-    st.markdown(f"#### 🛡️ 수비 지분: `{home_info['def_share']:.2f} / 4.50 UV`")
-    st.write(f"- **투수 지분 (50%):** `{home_info['pitcher_share']:.2f} UV`")
-    st.write(f"- **포수 지분 (10%):** `{home_info['c_share']:.2f} UV`")
-    st.write(f"- **야수 7인 지분 (40%):** `{home_info['fld_share']:.2f} UV`")
-    st.caption(
-        f"⚾ **투수 세부:** {home_info['sp_name']} ({home_info['sp_uv']:.2f} UV, {home_info['exp_ip']:.1f}이닝) + "
-        f"불펜 ({home_info['bp_uv']:.2f} UV, {home_info['bullpen_ip']:.1f}이닝) -> 종합 투수 {home_info['pitcher_overall_uv']:.2f} UV"
-    )
-    
-    st.markdown(f"#### ⚔️ 공격 지분: `{home_info['off_share']:.2f} / 4.50 UV`")
-    st.write(f"- **1~9번 타선 지분:** `{home_info['off_share']:.2f} UV` (wOBA / OPS 기반 4.50 정규화)")
+if not filtered_df.empty:
+    filtered_df['day_no'] = None
+    day_valid_mask = filtered_df['actual_winner'] != 'Postponed'
+    filtered_df.loc[day_valid_mask, 'day_no'] = range(1, len(filtered_df[day_valid_mask]) + 1)
+    filtered_df['day_no'] = filtered_df['day_no'].fillna('취소')
 
+    day_stats_mask = (filtered_df['actual_winner'] != 'Postponed') & (filtered_df['actual_winner'].notna()) & (filtered_df['actual_winner'] != '')
+    finished_games = filtered_df[day_stats_mask]
+    finished_count = len(finished_games)
+    
+    col1, col2, col3 = st.columns(3)
+    col1.metric("해당일 총 경기 수", f"{len(filtered_df)} 경기")
+    col2.metric("종료된 경기", f"{finished_count} 경기")
+    if finished_count > 0:
+        acc = (finished_games['is_correct'].sum() / finished_count) * 100
+        col3.metric("일일 적중률", f"{acc:.1f}%")
+    else:
+        col3.metric("일일 적중률", "-")
+
+    display_df = filtered_df[[
+        'day_no', 'total_no', 'home_team', 'visit_team', 
+        'predicted_winner', 'predicted_gap', 'actual_winner', 'is_correct'
+    ]].copy()
+    
+    display_df.columns = [
+        'No.(Day)', 'No.(Total)', '홈 팀', '원정 팀', 
+        '예측 승리팀', '예상 격차(uv)', '실제 승리팀', '적중 여부'
+    ]
+    
+    def mark_ox(row):
+        if row['실제 승리팀'] == 'Postponed': return "🆖 취소"
+        if pd.isna(row['적중 여부']) or row['실제 승리팀'] == '': return "⏳ 대기"
+        return "✅ 정답" if row['적중 여부'] == 1 else "❌ 오답"
+    
+    display_df['적중 여부'] = display_df.apply(mark_ox, axis=1)
+    display_df['예상 격차(uv)'] = display_df['예상 격차(uv)'].apply(lambda x: f"{x:.2f}")
+    display_df['실제 승리팀'] = display_df['실제 승리팀'].replace('Postponed', '취소됨').fillna('⏳ 대기 중')
+
+    st.dataframe(display_df, hide_index=True, width="stretch")
+
+# 검증 매치업 상세 분석 카드 (San Diego Padres vs Atlanta Braves)
+st.markdown("### 🔥 검증 매치업 상세 데이터 (9.0 WUV 기준)")
+col_sd, col_atl = st.columns(2)
+with col_sd:
+    st.info("**San Diego Padres (원정): 9.32 / 9.00 UV**\n\n"
+            "- 🛡️ **수비 지분 (4.50 기준):** 4.90 UV (투수 2.90 | 포수 0.52 | 야수 1.48)\n"
+            "- ⚔️ **공격 지분 (4.50 기준):** 4.42 UV (1~9번 타선)\n"
+            "- ⚾ **투수 세부:** Dylan Cease (6.20 UV, 6.0이닝) + 불펜 (5.00 UV, 3.0이닝) -> 투수 5.80 UV")
+with col_atl:
+    st.success("**Atlanta Braves (홈): 8.57 / 9.00 UV**\n\n"
+               "- 🛡️ **수비 지분 (4.50 기준):** 4.57 UV (투수 2.53 | 포수 0.50 | 야수 1.54)\n"
+               "- ⚔️ **공격 지분 (4.50 기준):** 4.00 UV (1~9번 타선)\n"
+               "- ⚾ **투수 세부:** Reynaldo López (5.08 UV, 6.5이닝) + 불펜 (5.00 UV, 2.5이닝) -> 투수 5.06 UV")
+
+if st.button("데이터 새로고침"):
+    st.rerun()
+
+# -----------------------------------------------------------------------------
+# 4. [최하단] 푸터 문구
+# -----------------------------------------------------------------------------
 st.markdown("---")
-
-# 시각화 비교 데이터프레임 / 차트
-st.markdown("#### 📈 공/수 지분 비교 차트")
-
-chart_data = pd.DataFrame({
-    "구분": ["수비 지분 (4.5 만점)", "공격 지분 (4.5 만점)", "최종 팀 UV (9.0 만점)"],
-    f"{away_team} (원정)": [away_info["def_share"], away_info["off_share"], away_info["norm_team_uv"]],
-    f"{home_team} (홈)": [home_info["def_share"], home_info["off_share"], home_info["norm_team_uv"]]
-})
-
-st.dataframe(chart_data, use_container_width=True, hide_index=True)
-
-st.markdown("---")
-st.caption("© 2026 MLB WUV Predictor | Live MLB Stats API Integration | Built with Streamlit")
+st.markdown(
+    """
+    <div style="text-align: center; color: #888888; padding-top: 20px;">
+        <p>ⓒ DROPSHOT (사업자 번호: 578-81-03214)</p>
+        <p>Contact us: liskhan@gmail.com</p>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
