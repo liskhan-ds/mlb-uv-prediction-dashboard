@@ -4,13 +4,13 @@ import pandas as pd
 import altair as alt
 import os
 from datetime import datetime
+import test_mlb_single as engine
 
 # -----------------------------------------------------------------------------
 # 1. 설정 및 데이터 로드
 # -----------------------------------------------------------------------------
 st.set_page_config(page_title="MLB AI 승부예측", page_icon="⚾", layout="wide")
 
-# 실행 경로와 관계없이 DB를 찾을 수 있도록 절대 경로 설정
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "mlb_data.db")
 
@@ -26,17 +26,17 @@ def load_data():
         except Exception:
             pass
             
-    # 검증 경기 기본 데이터: San Diego Padres (9.32 UV) vs Atlanta Braves (8.57 UV)
+    # Fallback Data (2026-08-26)
     data = [{
-        "date": "2024-05-20",
+        "date": "2026-08-26",
         "home_team": "Atlanta Braves",
-        "visit_team": "San Diego Padres",
-        "predicted_winner": "San Diego Padres",
-        "predicted_gap": 0.75,
-        "home_uv": 8.57,
-        "visit_uv": 9.32,
-        "actual_winner": "San Diego Padres",
-        "is_correct": 1
+        "visit_team": "Los Angeles Dodgers",
+        "predicted_winner": "Los Angeles Dodgers",
+        "predicted_gap": 0.02,
+        "home_uv": 8.88,
+        "visit_uv": 8.90,
+        "actual_winner": "",
+        "is_correct": None
     }]
     return pd.DataFrame(data)
 
@@ -77,7 +77,7 @@ stats_df = df[
 # -----------------------------------------------------------------------------
 st.header("📊 누적 예측 성적표")
 total_stats = len(stats_df)
-correct_total = stats_df['is_correct'].sum()
+correct_total = stats_df['is_correct'].sum() if total_stats > 0 else 0
 
 col_acc, col_track = st.columns([2, 1])
 
@@ -96,7 +96,11 @@ if total_stats > 0:
         else:
             st.metric("시스템 검증 상태", "검증 완료 (신계 등급)")
 else:
-    st.subheader("데이터 수집 중...")
+    with col_acc:
+        st.subheader(f"전체 예측 대상 경기: `{len(df)} 경기`")
+        st.markdown(f"**예측 완료 경기:** {len(df)} 경기 (경기 종료 후 실시간 적중률 집계)")
+    with col_track:
+        st.metric("시스템 상태", "실시간 예측 진행 중")
 
 st.markdown("---")
 
@@ -114,15 +118,14 @@ if not stats_df.empty:
     daily_stats['accuracy'] = (daily_stats['correct_games'] / daily_stats['total_games']) * 100
     
     def get_bar_color(acc):
-        if acc >= 60: return '#A020F0'      # 보라 (신계)
-        elif acc >= 55: return '#FF0000'    # 빨강 (초고수/AI)
-        elif acc >= 52.4: return '#FFA500'  # 주황 (프로/고수)
-        elif acc >= 45: return '#1E90FF'    # 파랑 (노력하는 일반인)
-        elif acc >= 35: return '#008000'    # 녹색 (지극히 정상인)
-        else: return '#808080'             # 회색 (예측 금지)
+        if acc >= 60: return '#A020F0'
+        elif acc >= 55: return '#FF0000'
+        elif acc >= 52.4: return '#FFA500'
+        elif acc >= 45: return '#1E90FF'
+        elif acc >= 35: return '#008000'
+        else: return '#808080'
 
     daily_stats['bar_color'] = daily_stats['accuracy'].apply(get_bar_color)
-    
     daily_stats['label_text'] = daily_stats.apply(
         lambda x: f"{int(x['correct_games'])}/{int(x['total_games'])}", 
         axis=1
@@ -141,9 +144,8 @@ if not stats_df.empty:
     )
     st.altair_chart((bars + text).properties(height=350), width="stretch")
 else:
-    st.info("통계를 표시할 수 있는 종료된 경기가 아직 없습니다.")
+    st.info("💡 예정 경기 예측 완료! (경기가 종료되는 대로 실시간 적중률이 집계됩니다.)")
 
-# 6단계 등급 범례 하단 표시
 st.markdown("""
 <div style="text-align: center; padding: 12px; background-color: #f0f2f6; border-radius: 10px; line-height: 1.6;">
     <span style="color: #A020F0;">●</span> <b>신계</b> (60%↑) &nbsp;&nbsp;
@@ -159,14 +161,17 @@ st.markdown("""
 st.markdown("---")
 
 # -----------------------------------------------------------------------------
-# 3. [하단] 일별 상세 예측 리포트 & 검증 매치업 상세
+# 3. [하단] 일별 상세 예측 리포트 (2026-08-26 기본 선택)
 # -----------------------------------------------------------------------------
 st.header("📋 일별 상세 예측 리포트")
 
 df['date_dt'] = pd.to_datetime(df['date']).dt.date
 unique_dates = sorted(df['date_dt'].unique(), reverse=True)
 
-selected_date = st.date_input("확인하고 싶은 날짜를 선택하세요:", value=unique_dates[0])
+default_date_target = datetime.strptime("2026-08-26", "%Y-%m-%d").date()
+default_val = default_date_target if default_date_target in unique_dates else unique_dates[0]
+
+selected_date = st.date_input("확인하고 싶은 날짜를 선택하세요:", value=default_val)
 filtered_df = df[df['date_dt'] == selected_date].copy().reset_index(drop=True)
 
 if not filtered_df.empty:
@@ -186,7 +191,7 @@ if not filtered_df.empty:
         acc = (finished_games['is_correct'].sum() / finished_count) * 100
         col3.metric("일일 적중률", f"{acc:.1f}%")
     else:
-        col3.metric("일일 적중률", "-")
+        col3.metric("일일 적중률", "예측 완료 (대기)")
 
     display_df = filtered_df[[
         'day_no', 'total_no', 'home_team', 'visit_team', 
@@ -209,25 +214,49 @@ if not filtered_df.empty:
 
     st.dataframe(display_df, hide_index=True, width="stretch")
 
-# 검증 매치업 상세 분석 카드 (San Diego Padres vs Atlanta Braves)
-st.markdown("### 🔥 검증 매치업 상세 데이터 (9.0 WUV 기준)")
-col_sd, col_atl = st.columns(2)
-with col_sd:
-    st.info("**San Diego Padres (원정): 9.32 / 9.00 UV**\n\n"
-            "- 🛡️ **수비 지분 (4.50 기준):** 4.90 UV (투수 2.90 | 포수 0.52 | 야수 1.48)\n"
-            "- ⚔️ **공격 지분 (4.50 기준):** 4.42 UV (1~9번 타선)\n"
-            "- ⚾ **투수 세부:** Dylan Cease (6.20 UV, 6.0이닝) + 불펜 (5.00 UV, 3.0이닝) -> 투수 5.80 UV")
-with col_atl:
-    st.success("**Atlanta Braves (홈): 8.57 / 9.00 UV**\n\n"
-               "- 🛡️ **수비 지분 (4.50 기준):** 4.57 UV (투수 2.53 | 포수 0.50 | 야수 1.54)\n"
-               "- ⚔️ **공격 지분 (4.50 기준):** 4.00 UV (1~9번 타선)\n"
-               "- ⚾ **투수 세부:** Reynaldo López (5.08 UV, 6.5이닝) + 불펜 (5.00 UV, 2.5이닝) -> 투수 5.06 UV")
+st.markdown("---")
+
+# -----------------------------------------------------------------------------
+# 4. [선택 매치업 9.0 WUV 상세 분석 카드]
+# -----------------------------------------------------------------------------
+st.header("🔥 선택 경기 9.0 WUV 상세 전력 분석")
+
+if not filtered_df.empty:
+    game_list = [f"{row['visit_team']} @ {row['home_team']}" for _, row in filtered_df.iterrows()]
+    selected_match = st.selectbox("상세 전력을 확인할 경기를 선택하세요:", game_list)
+    
+    idx = game_list.index(selected_match)
+    selected_row = filtered_df.iloc[idx]
+    
+    away_name = selected_row['visit_team']
+    home_name = selected_row['home_team']
+    pred_w = selected_row['predicted_winner']
+    gap_val = selected_row['predicted_gap']
+    away_uv_val = selected_row['visit_uv']
+    home_uv_val = selected_row['home_uv']
+    
+    col_m1, col_m2, col_m3 = st.columns(3)
+    col_m1.metric("예측 승리팀", pred_w, delta="9.0 WUV 모델 우세")
+    col_m2.metric("전력 격차 (ΔUV)", f"+{gap_val:.2f} UV")
+    col_m3.metric("팀 전력 UV 비교", f"{away_name} {away_uv_val:.2f} vs {home_uv_val:.2f} {home_name}")
+    
+    col_a, col_h = st.columns(2)
+    with col_a:
+        st.info(f"**✈️ {away_name} (원정)**\n\n"
+                f"- **최종 팀 UV:** `{away_uv_val:.2f} / 9.00 UV`\n"
+                f"- **수비 지분 (4.50 기준):** `{away_uv_val*0.5:.2f} UV`\n"
+                f"- **공격 지분 (4.50 기준):** `{away_uv_val*0.5:.2f} UV`")
+    with col_h:
+        st.success(f"**🏠 {home_name} (홈)**\n\n"
+                 f"- **최종 팀 UV:** `{home_uv_val:.2f} / 9.00 UV`\n"
+                 f"- **수비 지분 (4.50 기준):** `{home_uv_val*0.5:.2f} UV`\n"
+                 f"- **공격 지분 (4.50 기준):** `{home_uv_val*0.5:.2f} UV`")
 
 if st.button("데이터 새로고침"):
     st.rerun()
 
 # -----------------------------------------------------------------------------
-# 4. [최하단] 푸터 문구
+# 5. [최하단] 푸터 문구
 # -----------------------------------------------------------------------------
 st.markdown("---")
 st.markdown(
