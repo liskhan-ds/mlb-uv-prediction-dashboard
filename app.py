@@ -49,7 +49,7 @@ with nav_col1:
 with nav_col2:
     st.link_button(
         "🏀 NBA 대시보드 바로가기 ↗", 
-        "https://nba-uv-prediction-dashboard-6ahdkhmixcsa3uybaz6ez6.streamlit.app/"
+        "https://nba-uv-prediction.streamlit.app/"
     )
 
 st.divider()
