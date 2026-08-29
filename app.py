@@ -43,19 +43,25 @@ def load_data():
 df = load_data()
 
 # 상단 탭 네비게이션
-nav_col1, nav_col2, nav_col3, _ = st.columns([2.5, 2.5, 2.5, 2.5])
+nav_col1, nav_col2, nav_col3, nav_col4 = st.columns([2.5, 2.5, 2.5, 2.5])
 with nav_col1:
-    st.button("⚾ MLB 대시보드 (현재)", disabled=True, use_container_width=True)
-with nav_col2:
     st.link_button(
-        "🏀 NBA 대시보드 바로가기 ↗", 
-        "https://nba-uv-prediction.streamlit.app/",
+        "🏀 NBA 대시보드 ↗", 
+        "https://nba-uv-prediction-dashboard.streamlit.app/",
         use_container_width=True
     )
+with nav_col2:
+    st.button("⚾ MLB 대시보드 (현재)", disabled=True, use_container_width=True)
 with nav_col3:
     st.link_button(
-        "⚽ EPL 대시보드 바로가기 ↗", 
-        "https://epl-uv-prediction.streamlit.app/",
+        "⚽ EPL 대시보드 ↗", 
+        "https://epl-uv-prediction-dashboard.streamlit.app/",
+        use_container_width=True
+    )
+with nav_col4:
+    st.link_button(
+        "🏒 NHL 대시보드 ↗", 
+        "https://nhl-uv-prediction-dashboard.streamlit.app/",
         use_container_width=True
     )
 
