@@ -238,8 +238,11 @@ if not filtered_df.empty:
         
         suffix = f" (G{match_seen[key]})" if match_counts[key] > 1 else ""
         
-        h_abbr = to_abbr(row['home_team']) + suffix
-        v_abbr = to_abbr(row['visit_team']) + suffix
+        h_uv = row.get('home_uv', 0.0)
+        v_uv = row.get('visit_uv', 0.0)
+        
+        h_abbr = f"{to_abbr(row['home_team'])}{suffix} ({h_uv:.2f})"
+        v_abbr = f"{to_abbr(row['visit_team'])}{suffix} ({v_uv:.2f})"
         
         p_name = row['predicted_winner']
         p_abbr = to_abbr(p_name) + (suffix if p_name in key else "")
@@ -262,8 +265,8 @@ if not filtered_df.empty:
         rows_formatted.append({
             'No.(Day)': row['day_no'],
             'No.(Total)': row['total_no'],
-            '홈 팀': h_abbr,
-            '원정 팀': v_abbr,
+            '홈 팀 (WUV)': h_abbr,
+            '원정 팀 (WUV)': v_abbr,
             '예측 승리팀': p_abbr,
             '예상 격차(uv)': f"{row['predicted_gap']:.2f}",
             '실제 승리팀': a_abbr,
