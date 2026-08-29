@@ -187,6 +187,25 @@ default_val = default_date_target if default_date_target in unique_dates else un
 selected_date = st.date_input("확인하고 싶은 날짜를 선택하세요:", value=default_val)
 filtered_df = df[df['date_dt'] == selected_date].copy().reset_index(drop=True)
 
+TEAM_ABBR = {
+    'Arizona Diamondbacks': 'ARI', 'Atlanta Braves': 'ATL', 'Baltimore Orioles': 'BAL',
+    'Boston Red Sox': 'BOS', 'Chicago Cubs': 'CHC', 'Chicago White Sox': 'CWS',
+    'Cincinnati Reds': 'CIN', 'Cleveland Guardians': 'CLE', 'Colorado Rockies': 'COL',
+    'Detroit Tigers': 'DET', 'Houston Astros': 'HOU', 'Kansas City Royals': 'KC',
+    'Los Angeles Angels': 'LAA', 'Los Angeles Dodgers': 'LAD', 'Miami Marlins': 'MIA',
+    'Milwaukee Brewers': 'MIL', 'Minnesota Twins': 'MIN', 'New York Mets': 'NYM',
+    'New York Yankees': 'NYY', 'Athletics': 'ATH', 'Oakland Athletics': 'ATH',
+    'Philadelphia Phillies': 'PHI', 'Pittsburgh Pirates': 'PIT', 'San Diego Padres': 'SD',
+    'San Francisco Giants': 'SF', 'Seattle Mariners': 'SEA', 'St. Louis Cardinals': 'STL',
+    'Tampa Bay Rays': 'TB', 'Texas Rangers': 'TEX', 'Toronto Blue Jays': 'TOR',
+    'Washington Nationals': 'WAS'
+}
+
+def to_abbr(name):
+    if not name or name in ['Postponed', '취소됨', '⏳ 대기 중', '']:
+        return name
+    return TEAM_ABBR.get(name, name)
+
 if not filtered_df.empty:
     filtered_df['day_no'] = None
     day_valid_mask = filtered_df['actual_winner'] != 'Postponed'
@@ -206,24 +225,54 @@ if not filtered_df.empty:
     else:
         col3.metric("일일 적중률", "예측 완료 (대기)")
 
-    display_df = filtered_df[[
-        'day_no', 'total_no', 'home_team', 'visit_team', 
-        'predicted_winner', 'predicted_gap', 'actual_winner', 'is_correct'
-    ]].copy()
-    
-    display_df.columns = [
-        'No.(Day)', 'No.(Total)', '홈 팀', '원정 팀', 
-        '예측 승리팀', '예상 격차(uv)', '실제 승리팀', '적중 여부'
-    ]
-    
-    def mark_ox(row):
-        if row['실제 승리팀'] == 'Postponed': return "🆖 취소"
-        if pd.isna(row['적중 여부']) or row['실제 승리팀'] == '': return "⏳ 대기"
-        return "✅ 정답" if row['적중 여부'] == 1 else "❌ 오답"
-    
-    display_df['적중 여부'] = display_df.apply(mark_ox, axis=1)
-    display_df['예상 격차(uv)'] = display_df['예상 격차(uv)'].apply(lambda x: f"{x:.2f}")
-    display_df['실제 승리팀'] = display_df['실제 승리팀'].replace('Postponed', '취소됨').fillna('⏳ 대기 중')
+    # 더블헤더(동일 날짜 동일 매치업) 감지 및 G1/G2 수식어 부여
+    match_counts = {}
+    for _, row in filtered_df.iterrows():
+        key = (row['home_team'], row['visit_team'])
+        match_counts[key] = match_counts.get(key, 0) + 1
+
+    match_seen = {}
+    rows_formatted = []
+    for _, row in filtered_df.iterrows():
+        key = (row['home_team'], row['visit_team'])
+        match_seen[key] = match_seen.get(key, 0) + 1
+        
+        suffix = f" (G{match_seen[key]})" if match_counts[key] > 1 else ""
+        
+        h_abbr = to_abbr(row['home_team']) + suffix
+        v_abbr = to_abbr(row['visit_team']) + suffix
+        
+        p_name = row['predicted_winner']
+        p_abbr = to_abbr(p_name) + (suffix if p_name in key else "")
+        
+        a_name = row['actual_winner']
+        if a_name == 'Postponed':
+            a_abbr = "취소됨"
+        elif pd.isna(a_name) or a_name == '':
+            a_abbr = "⏳ 대기 중"
+        else:
+            a_abbr = to_abbr(a_name) + (suffix if a_name in key else "")
+            
+        if a_name == 'Postponed':
+            ox_mark = "🆖 취소"
+        elif pd.isna(row['is_correct']) or a_name == '':
+            ox_mark = "⏳ 대기"
+        else:
+            ox_mark = "✅ 정답" if row['is_correct'] == 1 else "❌ 오답"
+            
+        rows_formatted.append({
+            'No.(Day)': row['day_no'],
+            'No.(Total)': row['total_no'],
+            '홈 팀': h_abbr,
+            '원정 팀': v_abbr,
+            '예측 승리팀': p_abbr,
+            '예상 격차(uv)': f"{row['predicted_gap']:.2f}",
+            '실제 승리팀': a_abbr,
+            '적중 여부': ox_mark
+        })
+        
+    display_df = pd.DataFrame(rows_formatted)
+    st.dataframe(display_df, hide_index=True, width="stretch")
 
     if st.button("데이터 새로고침"):
         st.rerun()
