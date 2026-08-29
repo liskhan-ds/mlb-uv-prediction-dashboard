@@ -225,48 +225,8 @@ if not filtered_df.empty:
     display_df['예상 격차(uv)'] = display_df['예상 격차(uv)'].apply(lambda x: f"{x:.2f}")
     display_df['실제 승리팀'] = display_df['실제 승리팀'].replace('Postponed', '취소됨').fillna('⏳ 대기 중')
 
-    st.dataframe(display_df, hide_index=True, width="stretch")
-
-st.markdown("---")
-
-# -----------------------------------------------------------------------------
-# 4. [선택 매치업 9.0 WUV 상세 분석 카드]
-# -----------------------------------------------------------------------------
-st.header("🔥 선택 경기 9.0 WUV 상세 전력 분석")
-
-if not filtered_df.empty:
-    game_list = [f"{row['visit_team']} @ {row['home_team']}" for _, row in filtered_df.iterrows()]
-    selected_match = st.selectbox("상세 전력을 확인할 경기를 선택하세요:", game_list)
-    
-    idx = game_list.index(selected_match)
-    selected_row = filtered_df.iloc[idx]
-    
-    away_name = selected_row['visit_team']
-    home_name = selected_row['home_team']
-    pred_w = selected_row['predicted_winner']
-    gap_val = selected_row['predicted_gap']
-    away_uv_val = selected_row['visit_uv']
-    home_uv_val = selected_row['home_uv']
-    
-    col_m1, col_m2, col_m3 = st.columns(3)
-    col_m1.metric("예측 승리팀", pred_w, delta="9.0 WUV 모델 우세")
-    col_m2.metric("전력 격차 (ΔUV)", f"+{gap_val:.2f} UV")
-    col_m3.metric("팀 전력 UV 비교", f"{away_name} {away_uv_val:.2f} vs {home_uv_val:.2f} {home_name}")
-    
-    col_a, col_h = st.columns(2)
-    with col_a:
-        st.info(f"**✈️ {away_name} (원정)**\n\n"
-                f"- **최종 팀 UV:** `{away_uv_val:.2f} / 9.00 UV`\n"
-                f"- **수비 지분 (4.50 기준):** `{away_uv_val*0.5:.2f} UV`\n"
-                f"- **공격 지분 (4.50 기준):** `{away_uv_val*0.5:.2f} UV`")
-    with col_h:
-        st.success(f"**🏠 {home_name} (홈)**\n\n"
-                 f"- **최종 팀 UV:** `{home_uv_val:.2f} / 9.00 UV`\n"
-                 f"- **수비 지분 (4.50 기준):** `{home_uv_val*0.5:.2f} UV`\n"
-                 f"- **공격 지분 (4.50 기준):** `{home_uv_val*0.5:.2f} UV`")
-
-if st.button("데이터 새로고침"):
-    st.rerun()
+    if st.button("데이터 새로고침"):
+        st.rerun()
 
 # -----------------------------------------------------------------------------
 # 5. [최하단] 푸터 문구
