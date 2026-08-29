@@ -276,40 +276,6 @@ if not filtered_df.empty:
     if st.button("데이터 새로고침"):
         st.rerun()
 
-st.markdown("---")
-
-# -----------------------------------------------------------------------------
-# 4. [선택 매치업 WUV 전력 분석 카드]
-# -----------------------------------------------------------------------------
-st.header("🔥 선택 경기 WUV 전력 분석")
-
-if not filtered_df.empty:
-    game_list = [f"{to_abbr(row['visit_team'])} @ {to_abbr(row['home_team'])}" for _, row in filtered_df.iterrows()]
-    selected_match = st.selectbox("상세 WUV 전력을 확인할 경기를 선택하세요:", game_list)
-    
-    idx = game_list.index(selected_match)
-    selected_row = filtered_df.iloc[idx]
-    
-    away_abbr = to_abbr(selected_row['visit_team'])
-    home_abbr = to_abbr(selected_row['home_team'])
-    pred_abbr = to_abbr(selected_row['predicted_winner'])
-    gap_val = selected_row['predicted_gap']
-    away_uv_val = selected_row['visit_uv']
-    home_uv_val = selected_row['home_uv']
-    
-    col_m1, col_m2, col_m3 = st.columns(3)
-    col_m1.metric("예측 승리팀", pred_abbr, delta="WUV 모델 우세")
-    col_m2.metric("전력 격차 (ΔUV)", f"+{gap_val:.2f} UV")
-    col_m3.metric("팀 전력 WUV 비교", f"{away_abbr} {away_uv_val:.2f} vs {home_uv_val:.2f} {home_abbr}")
-    
-    col_a, col_h = st.columns(2)
-    with col_a:
-        st.info(f"**✈️ {selected_row['visit_team']} ({away_abbr})**\n\n"
-                f"- **팀 최종 WUV 합:** `{away_uv_val:.2f} WUV`")
-    with col_h:
-        st.success(f"**🏠 {selected_row['home_team']} ({home_abbr})**\n\n"
-                 f"- **팀 최종 WUV 합:** `{home_uv_val:.2f} WUV`")[diff_block_end]
-
 # -----------------------------------------------------------------------------
 # 5. [최하단] 푸터 문구
 # -----------------------------------------------------------------------------
