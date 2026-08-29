@@ -68,8 +68,7 @@ with nav_col4:
 st.divider()
 
 # 타이틀 및 본문 설명
-st.title("⚾ MLB AI 승부예측 (by 9.0 WUV predictor)")
-st.caption("9.0 WUV 기준 (수비 4.5 UV + 공격 4.5 UV) | 야구 라인업 (선발/불펜 투수 + 1~9번 타선)")
+st.title("⚾ MLB AI 승부예측(by WUV predictor)")
 
 # -----------------------------------------------------------------------------
 # [로직] 적중률 계산 및 넘버링 필터링

@@ -3,21 +3,6 @@
 
 """
 MLB WUV Predictor Core Engine (test_mlb_single.py)
-[9.0 UV 정규화 체계 (수비 4.5 UV + 공격 4.5 UV = 총 9.0 UV)]
-
-1. 수비 지분 (4.50 UV 기준):
-   - 투수 지분 (50%, 2.50 UV 기준): 선발 투수 기대 이닝 가중합 투수 종합 UV * 0.5
-   - 포수 지분 (10%, 0.50 UV 기준): 포수 프레이밍/도루저지/수비율 * 0.5
-   - 야수 지분 (40%, 1.50 UV 기준): 야수 7인 수비율 * 0.5
-   - 수비 지분 총합 = 투수 지분 + 포수 지분 + 야수 지분 (4.50 UV 기준)
-
-2. 공격 지분 (4.50 UV 기준):
-   - 1~9번 타자 지분: wOBA / OPS 기준 1~9번 타선 합산 * 0.5 (4.50 UV 기준)
-
-3. 최종 팀 UV (9.00 UV 기준):
-   - 최종 팀 UV = 수비 지분(4.50 기준) + 공격 지분(4.50 기준)
-
-4. 9이닝 기대 득점 시뮬레이션
 """
 
 import sys
@@ -494,21 +479,13 @@ def run_mlb_single_predictor():
     winner_team = result["winner_team"]
 
     report = f"""==================================================
-⚾ MLB WUV Predictor (9.0 UV 기준)
+⚾ MLB WUV Predictor
 --------------------------------------------------
 [원정팀] {away_team_name}
- • 투수 세부: {away_info['sp_name']}({away_info['sp_uv']:.2f} UV, {away_info['exp_ip']:.1f}이닝) + 불펜({away_info['bp_uv']:.2f} UV, {away_info['bullpen_ip']:.1f}이닝) -> 투수 {away_info['pitcher_overall_uv']:.2f} UV
- • 수비 지분: {away_info['def_share']:.2f} / 4.50 UV (투수 {away_info['pitcher_share']:.2f} | 포수 {away_info['c_share']:.2f} | 야수 {away_info['fld_share']:.2f})
- • 공격 지분: {away_info['off_share']:.2f} / 4.50 UV (1~9번 타선)
- --------------------------------------------------
- • 최종 팀 UV: {away_info['norm_team_uv']:.2f} / 9.00 UV
+ • 최종 팀 UV: {away_info['norm_team_uv']:.2f} UV
 
 [홈팀] {home_team_name}
- • 투수 세부: {home_info['sp_name']}({home_info['sp_uv']:.2f} UV, {home_info['exp_ip']:.1f}이닝) + 불펜({home_info['bp_uv']:.2f} UV, {home_info['bullpen_ip']:.1f}이닝) -> 투수 {home_info['pitcher_overall_uv']:.2f} UV
- • 수비 지분: {home_info['def_share']:.2f} / 4.50 UV (투수 {home_info['pitcher_share']:.2f} | 포수 {home_info['c_share']:.2f} | 야수 {home_info['fld_share']:.2f})
- • 공격 지분: {home_info['off_share']:.2f} / 4.50 UV (1~9번 타선)
- --------------------------------------------------
- • 최종 팀 UV: {home_info['norm_team_uv']:.2f} / 9.00 UV
+ • 최종 팀 UV: {home_info['norm_team_uv']:.2f} UV
 --------------------------------------------------
 [예상 스코어] 원정 {away_expected_score:.1f}점 vs 홈 {home_expected_score:.1f}점
 [예상 격차] +{gap:.2f} UV ({leading_team} 우세)
