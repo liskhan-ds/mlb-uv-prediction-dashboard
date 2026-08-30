@@ -180,7 +180,7 @@ st.header("📋 일별 상세 예측 리포트")
 df['date_dt'] = pd.to_datetime(df['date']).dt.date
 unique_dates = sorted(df['date_dt'].unique(), reverse=True)
 
-default_date_target = datetime.strptime("2026-08-29", "%Y-%m-%d").date()
+default_date_target = datetime.strptime("2026-08-30", "%Y-%m-%d").date()
 default_val = default_date_target if default_date_target in unique_dates else unique_dates[0]
 
 selected_date = st.date_input("확인하고 싶은 날짜를 선택하세요:", value=default_val)
