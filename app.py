@@ -274,10 +274,8 @@ if not filtered_df.empty:
         })
         
     display_df = pd.DataFrame(rows_formatted)
-    st.dataframe(display_df, hide_index=True, width="stretch")
-
-    if st.button("데이터 새로고침"):
-        st.rerun()
+    table_height = max(400, (len(display_df) + 1) * 37 + 15)
+    st.dataframe(display_df, hide_index=True, width="stretch", height=table_height)
 
 # -----------------------------------------------------------------------------
 # 5. [최하단] 푸터 문구
