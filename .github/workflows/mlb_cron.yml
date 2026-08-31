@@ -1,0 +1,45 @@
+name: MLB Daily Automated WUV Pipeline
+
+on:
+  schedule:
+    # 1) 예측 자동 실행: 14:00 UTC = 매일 밤 23:00 KST (10:00 AM EDT)
+    - cron: '0 14 * * *'
+    # 2) 경기 결과 자동 채점: 06:00 UTC = 매일 오후 15:00 KST (02:00 AM EDT)
+    - cron: '0 6 * * *'
+  workflow_dispatch: # GitHub UI에서 언제든 수동 실행 허용
+
+jobs:
+  mlb-pipeline:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Determine Mode and Run Pipeline
+        run: |
+          HOUR=$(date -u +%H)
+          if [ "$HOUR" -ge 12 ] && [ "$HOUR" -le 16 ]; then
+            echo "Running Predict Mode..."
+            python cron_mlb.py --mode predict
+          else
+            echo "Running Score Mode..."
+            python cron_mlb.py --mode score
+          fi
+
+      - name: Commit and Push Changes to GitHub
+        run: |
+          git config --global user.name "GitHub Actions Bot"
+          git config --global user.email "actions@github.com"
+          git add mlb_data.db
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Auto-update mlb_data.db via GitHub Actions Cron" && git push)
