@@ -2,10 +2,10 @@ name: MLB Daily Automated WUV Pipeline
 
 on:
   schedule:
-    # 1) 예측 자동 실행: 14:00 UTC = 매일 밤 23:00 KST (10:00 AM EDT)
-    - cron: '0 14 * * *'
-    # 2) 경기 결과 자동 채점: 06:00 UTC = 매일 오후 15:00 KST (02:00 AM EDT)
-    - cron: '0 6 * * *'
+    # 1) 예측 자동 실행: 12:00 UTC = 매일 밤 21:00 KST (지연되어도 23시 이전 완료)
+    - cron: '0 12 * * *'
+    # 2) 경기 결과 자동 채점: 05:00 UTC = 매일 오후 14:00 KST (지연되어도 15시 이전 완료)
+    - cron: '0 5 * * *'
   workflow_dispatch: # GitHub UI에서 언제든 수동 실행 허용
 
 jobs:
@@ -29,7 +29,7 @@ jobs:
       - name: Determine Mode and Run Pipeline
         run: |
           HOUR=$(date -u +%H)
-          if [ "$HOUR" -ge 12 ] && [ "$HOUR" -le 16 ]; then
+          if [ "$HOUR" -ge 10 ] && [ "$HOUR" -le 14 ]; then
             echo "Running Predict Mode..."
             python cron_mlb.py --mode predict
           else
