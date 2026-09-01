@@ -140,9 +140,25 @@ def run_predict(date_str=None):
     conn.close()
     print(f"Successfully populated {len(game_details)} predictions for {date_str} into mlb_data.db!")
 
+def get_us_score_date():
+    try:
+        conn = sqlite3.connect("mlb_data.db")
+        c = conn.cursor()
+        c.execute("SELECT DISTINCT date FROM predictions WHERE actual_winner IS NULL OR actual_winner = '' OR actual_winner = '대기' ORDER BY date ASC")
+        rows = c.fetchall()
+        conn.close()
+        if rows and rows[0][0]:
+            return rows[0][0]
+    except Exception:
+        pass
+        
+    utc_now = datetime.datetime.now(datetime.timezone.utc)
+    us_yesterday = utc_now - datetime.timedelta(hours=24)
+    return us_yesterday.strftime("%Y-%m-%d")
+
 def run_score(date_str=None):
     if not date_str:
-        date_str = get_us_date()
+        date_str = get_us_score_date()
     print(f"=== [SCORE MODE] Scoring game results for US date: {date_str} ===")
     
     session = requests.Session()
