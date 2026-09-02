@@ -7,9 +7,9 @@ from datetime import datetime
 import test_mlb_single as engine
 
 # -----------------------------------------------------------------------------
-# 1. 설정 및 데이터 로드
+# 1. Page Configuration & Setup
 # -----------------------------------------------------------------------------
-st.set_page_config(page_title="MLB AI 승부예측", page_icon="⚾", layout="wide")
+st.set_page_config(page_title="MLB AI Match Predictor", page_icon="⚾", layout="wide")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "mlb_data.db")
@@ -42,17 +42,18 @@ def load_data():
 
 df = load_data()
 
-# 상단 탭 네비게이션 (7대 종목)
-# 상단 탭 네비게이션 (7대 종목)
+# -----------------------------------------------------------------------------
+# Top Navigation Bar (7 Leagues)
+# -----------------------------------------------------------------------------
 nav_cols = st.columns(7)
 with nav_cols[0]:
     st.link_button("🏀 NBA ↗", "https://nba-uv-prediction.streamlit.app/", use_container_width=True)
 with nav_cols[1]:
-    st.button("⚾ MLB (현재)", disabled=True, use_container_width=True)
+    st.button("⚾ MLB (Current)", disabled=True, use_container_width=True)
 with nav_cols[2]:
     st.link_button("⚽ EPL ↗", "https://epl-uv-prediction.streamlit.app/", use_container_width=True)
 with nav_cols[3]:
-    st.link_button("⚽ 라리가 ↗", "https://pml-uv-prediction.streamlit.app/", use_container_width=True)
+    st.link_button("⚽ La Liga ↗", "https://llg-uv-prediction.streamlit.app/", use_container_width=True)
 with nav_cols[4]:
     st.link_button("🏒 NHL ↗", "https://nhl-uv-prediction.streamlit.app/", use_container_width=True)
 with nav_cols[5]:
@@ -62,16 +63,16 @@ with nav_cols[6]:
 
 st.divider()
 
-# 타이틀 및 본문 설명
-st.title("⚾ MLB AI 승부예측(by WUV predictor)")
+# Title
+st.title("⚾ MLB AI Match Predictor (by WUV predictor)")
 
 # -----------------------------------------------------------------------------
-# [로직] 적중률 계산 및 넘버링 필터링
+# Logic: Accuracy Calculation & Numbering
 # -----------------------------------------------------------------------------
 df['total_no'] = None
 valid_mask = df['actual_winner'] != 'Postponed'
 df.loc[valid_mask, 'total_no'] = range(1, len(df[valid_mask]) + 1)
-df['total_no'] = df['total_no'].fillna('취소')
+df['total_no'] = df['total_no'].fillna('Cancelled')
 
 stats_df = df[
     (df['actual_winner'] != 'Postponed') & 
@@ -80,9 +81,9 @@ stats_df = df[
 ].copy()
 
 # -----------------------------------------------------------------------------
-# 1. [상단] 누적 예측 성적표 & 100경기 트래킹
+# 1. Cumulative Prediction Scorecard & 100-Game Tracking
 # -----------------------------------------------------------------------------
-st.header("📊 누적 예측 성적표")
+st.header("📊 Cumulative Prediction Scorecard")
 total_stats = len(stats_df)
 correct_total = stats_df['is_correct'].sum() if total_stats > 0 else 0
 
@@ -90,31 +91,31 @@ col_acc, col_track = st.columns([2, 1])
 
 if total_stats > 0:
     total_acc = (correct_total / total_stats) * 100
-    status_suffix = " (⚡ 신계, 시장 왜곡급)" if total_acc >= 60 else ""
+    status_suffix = " (⚡ God-tier, Market Distortion)" if total_acc >= 60 else ""
     
     with col_acc:
-        st.subheader(f"전체 예측률: `{total_acc:.2f}%`{status_suffix}")
-        st.markdown(f"**적중 경기 수:** {int(correct_total)} / **통산 경기 수:** {total_stats}")
+        st.subheader(f"Overall Accuracy: `{total_acc:.2f}%`{status_suffix}")
+        st.markdown(f"**Correct Predictions:** {int(correct_total)} / **Total Games:** {total_stats}")
     
     with col_track:
         remaining = 100 - total_stats
         if remaining > 0:
-            st.metric("100경기 시스템 검증까지", f"{remaining}경기 남음")
+            st.metric("100-Game System Verification", f"{remaining} games remaining")
         else:
-            st.metric("시스템 검증 상태", "검증 완료 (신계 등급)")
+            st.metric("System Verification Status", "Verification Complete (God-tier)")
 else:
     with col_acc:
-        st.subheader(f"전체 예측 대상 경기: `{len(df)} 경기`")
-        st.markdown(f"**예측 완료 경기:** {len(df)} 경기 (경기 종료 후 실시간 적중률 집계)")
+        st.subheader(f"Total Predicted Games: `{len(df)} Games`")
+        st.markdown(f"**Completed Predictions:** {len(df)} Games (Live accuracy calculated after game completion)")
     with col_track:
-        st.metric("시스템 상태", "실시간 예측 진행 중")
+        st.metric("System Status", "Live Prediction in Progress")
 
 st.markdown("---")
 
 # -----------------------------------------------------------------------------
-# 2. [중단] 일별 예측 성적표 (6단계 등급 및 라벨)
+# 2. Daily Accuracy Scorecard (Past 7 Days)
 # -----------------------------------------------------------------------------
-st.header("📈 일별 예측 성적표 (최근 7일)")
+st.header("📈 Daily Accuracy Scorecard (Past 7 Days)")
 
 if not stats_df.empty:
     daily_stats = stats_df.groupby('date').agg(
@@ -140,9 +141,9 @@ if not stats_df.empty:
 
     daily_stats_7d = daily_stats.sort_values('date', ascending=True).tail(7)
 
-    base = alt.Chart(daily_stats_7d).encode(x=alt.X('date', title='날짜(MLB 현지)'))
+    base = alt.Chart(daily_stats_7d).encode(x=alt.X('date', title='Date (US Local)'))
     bars = base.mark_bar().encode(
-        y=alt.Y('accuracy', title='적중률(%)', scale=alt.Scale(domain=[0, 110])),
+        y=alt.Y('accuracy', title='Accuracy (%)', scale=alt.Scale(domain=[0, 110])),
         color=alt.Color('bar_color', scale=None),
         tooltip=['date', 'accuracy', 'total_games']
     )
@@ -151,26 +152,26 @@ if not stats_df.empty:
     )
     st.altair_chart((bars + text).properties(height=350), width="stretch")
 else:
-    st.info("💡 예정 경기 예측 완료! (경기가 종료되는 대로 실시간 적중률이 집계됩니다.)")
+    st.info("💡 Scheduled game predictions complete! (Live accuracy will be aggregated as games complete.)")
 
 st.markdown("""
 <div style="text-align: center; padding: 12px; background-color: #f0f2f6; border-radius: 10px; line-height: 1.6;">
-    <span style="color: #A020F0;">●</span> <b>신계</b> (60%↑) &nbsp;&nbsp;
-    <span style="color: #FF0000;">●</span> <b>초고수/AI</b> (55%~60%) &nbsp;&nbsp;
-    <span style="color: #FFA500;">●</span> <b>프로/고수</b> (52.4%~55%) &nbsp;&nbsp;
-    <span style="color: #1E90FF;">●</span> <b>노력하는 일반인</b> (45%~52.4%) &nbsp;&nbsp;
-    <span style="color: #008000;">●</span> <b>지극히 정상인</b> (35%~45%) &nbsp;&nbsp;
-    <span style="color: #808080;">●</span> <b>예측 금지</b> (35%↓)
-    <br><small>* 52.4%는 통계적 손익분기점(Breakeven) 기준입니다.</small>
+    <span style="color: #A020F0;">●</span> <b>God-tier</b> (60%↑) &nbsp;&nbsp;
+    <span style="color: #FF0000;">●</span> <b>Master/AI</b> (55%~60%) &nbsp;&nbsp;
+    <span style="color: #FFA500;">●</span> <b>Pro/Expert</b> (52.4%~55%) &nbsp;&nbsp;
+    <span style="color: #1E90FF;">●</span> <b>Advanced</b> (45%~52.4%) &nbsp;&nbsp;
+    <span style="color: #008000;">●</span> <b>Standard</b> (35%~45%) &nbsp;&nbsp;
+    <span style="color: #808080;">●</span> <b>No Bet</b> (35%↓)
+    <br><small>* 52.4% represents the statistical breakeven threshold.</small>
 </div>
 """, unsafe_allow_html=True)
 
 st.markdown("---")
 
 # -----------------------------------------------------------------------------
-# 3. [하단] 일별 상세 예측 리포트 (2026-08-26 기본 선택)
+# 3. Daily Detailed Prediction Report
 # -----------------------------------------------------------------------------
-st.header("📋 일별 상세 예측 리포트")
+st.header("📋 Daily Detailed Prediction Report")
 
 df['date_dt'] = pd.to_datetime(df['date']).dt.date
 unique_dates = sorted(df['date_dt'].unique(), reverse=True)
@@ -178,7 +179,7 @@ unique_dates = sorted(df['date_dt'].unique(), reverse=True)
 default_date_target = datetime.strptime("2026-09-01", "%Y-%m-%d").date()
 default_val = default_date_target if default_date_target in unique_dates else unique_dates[0]
 
-selected_date = st.date_input("확인하고 싶은 날짜를 선택하세요:", value=default_val)
+selected_date = st.date_input("Select Date to Inspect:", value=default_val)
 filtered_df = df[df['date_dt'] == selected_date].copy().reset_index(drop=True)
 
 TEAM_ABBR = {
@@ -196,7 +197,7 @@ TEAM_ABBR = {
 }
 
 def to_abbr(name):
-    if not name or name in ['Postponed', '취소됨', '⏳ 대기 중', '']:
+    if not name or name in ['Postponed', 'Cancelled', '취소됨', '⏳ Pending', '⏳ 대기 중', '']:
         return name
     return TEAM_ABBR.get(name, name)
 
@@ -204,22 +205,22 @@ if not filtered_df.empty:
     filtered_df['day_no'] = None
     day_valid_mask = filtered_df['actual_winner'] != 'Postponed'
     filtered_df.loc[day_valid_mask, 'day_no'] = range(1, len(filtered_df[day_valid_mask]) + 1)
-    filtered_df['day_no'] = filtered_df['day_no'].fillna('취소')
+    filtered_df['day_no'] = filtered_df['day_no'].fillna('Cancelled')
 
     day_stats_mask = (filtered_df['actual_winner'] != 'Postponed') & (filtered_df['actual_winner'].notna()) & (filtered_df['actual_winner'] != '')
     finished_games = filtered_df[day_stats_mask]
     finished_count = len(finished_games)
     
     col1, col2, col3 = st.columns(3)
-    col1.metric("해당일 총 경기 수", f"{len(filtered_df)} 경기")
-    col2.metric("종료된 경기", f"{finished_count} 경기")
+    col1.metric("Total Games Today", f"{len(filtered_df)} Games")
+    col2.metric("Finished Games", f"{finished_count} Games")
     if finished_count > 0:
         acc = (finished_games['is_correct'].sum() / finished_count) * 100
-        col3.metric("일일 적중률", f"{acc:.1f}%")
+        col3.metric("Daily Accuracy", f"{acc:.1f}%")
     else:
-        col3.metric("일일 적중률", "예측 완료 (대기)")
+        col3.metric("Daily Accuracy", "Prediction Complete (Pending)")
 
-    # 더블헤더(동일 날짜 동일 매치업) 감지 및 G1/G2 수식어 부여
+    # Doubleheader detection
     match_counts = {}
     for _, row in filtered_df.iterrows():
         key = (row['home_team'], row['visit_team'])
@@ -244,28 +245,28 @@ if not filtered_df.empty:
         
         a_name = row['actual_winner']
         if a_name == 'Postponed':
-            a_abbr = "취소됨"
+            a_abbr = "Cancelled"
         elif pd.isna(a_name) or a_name == '':
-            a_abbr = "⏳ 대기 중"
+            a_abbr = "⏳ Pending"
         else:
             a_abbr = to_abbr(a_name) + (suffix if a_name in key else "")
             
         if a_name == 'Postponed':
-            ox_mark = "🆖 취소"
+            ox_mark = "🆖 Cancelled"
         elif pd.isna(row['is_correct']) or a_name == '':
-            ox_mark = "⏳ 대기"
+            ox_mark = "⏳ Pending"
         else:
-            ox_mark = "✅ 정답" if row['is_correct'] == 1 else "❌ 오답"
+            ox_mark = "✅ Correct" if row['is_correct'] == 1 else "❌ Incorrect"
             
         rows_formatted.append({
             'No.(Day)': row['day_no'],
             'No.(Total)': row['total_no'],
-            '홈 팀 (WUV)': h_abbr,
-            '원정 팀 (WUV)': v_abbr,
-            '예측 승리팀': p_abbr,
-            '예상 격차(uv)': f"{row['predicted_gap']:.2f}",
-            '실제 승리팀': a_abbr,
-            '적중 여부': ox_mark
+            'Home Team (WUV)': h_abbr,
+            'Away Team (WUV)': v_abbr,
+            'Predicted Winner': p_abbr,
+            'Expected Gap (uv)': f"{row['predicted_gap']:.2f}",
+            'Actual Winner': a_abbr,
+            'Prediction Status': ox_mark
         })
         
     display_df = pd.DataFrame(rows_formatted)
@@ -273,13 +274,13 @@ if not filtered_df.empty:
     st.dataframe(display_df, hide_index=True, width="stretch", height=table_height)
 
 # -----------------------------------------------------------------------------
-# 5. [최하단] 푸터 문구
+# Footer
 # -----------------------------------------------------------------------------
 st.markdown("---")
 st.markdown(
     """
     <div style="text-align: center; color: #888888; padding-top: 20px;">
-        <p>ⓒ DROPSHOT (사업자 번호: 578-81-03214)</p>
+        <p>ⓒ DROPSHOT (Business Reg No: 578-81-03214)</p>
         <p>Contact us: liskhan@gmail.com</p>
     </div>
     """,
