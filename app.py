@@ -102,7 +102,19 @@ if total_stats > 0:
         if remaining > 0:
             st.metric("100-Game System Verification", f"{remaining} games remaining")
         else:
-            st.metric("System Verification Status", "Verification Complete (God-tier)")
+            if total_acc >= 60:
+                tier_str = "Complete (God-tier)"
+            elif total_acc >= 55:
+                tier_str = "Complete (Master/AI tier)"
+            elif total_acc >= 52.4:
+                tier_str = "Complete (Pro/Expert tier)"
+            elif total_acc >= 45:
+                tier_str = "Complete (Advanced tier)"
+            elif total_acc >= 35:
+                tier_str = "Complete (Standard tier)"
+            else:
+                tier_str = "Complete (No Bet tier)"
+            st.metric("System Verification Status", tier_str)
 else:
     with col_acc:
         st.subheader(f"Total Predicted Games: `{len(df)} Games`")
