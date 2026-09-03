@@ -10,16 +10,19 @@ on:
     - cron: '47 6 * * *'
   workflow_dispatch: # GitHub UI 수동 실행 허용
 
+permissions:
+  contents: write
+
 jobs:
   mlb-pipeline:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
