@@ -176,7 +176,7 @@ st.header("📋 Daily Detailed Prediction Report")
 df['date_dt'] = pd.to_datetime(df['date']).dt.date
 unique_dates = sorted(df['date_dt'].unique(), reverse=True)
 
-default_date_target = datetime.strptime("2026-09-02", "%Y-%m-%d").date()
+default_date_target = datetime.strptime("2026-09-03", "%Y-%m-%d").date()
 default_val = default_date_target if default_date_target in unique_dates else unique_dates[0]
 
 selected_date = st.date_input("Select Date to Inspect:", value=default_val)
