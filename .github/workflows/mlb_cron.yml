@@ -1,20 +1,17 @@
-name: MLB Daily Automated WUV Pipeline
+name: MLB Predict Pipeline
 
 on:
   schedule:
     # 1) 예측 무인 자동 실행: 23:17 KST (1차) & 23:47 KST (2차 백업)
     - cron: '17 14 * * *'
     - cron: '47 14 * * *'
-    # 2) 경기 결과 무인 자동 채점: 15:17 KST (1차) & 15:47 KST (2차 백업)
-    - cron: '17 6 * * *'
-    - cron: '47 6 * * *'
-  workflow_dispatch: # GitHub UI 수동 실행 허용
+  workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
-  mlb-pipeline:
+  mlb-predict:
     runs-on: ubuntu-latest
 
     steps:
@@ -31,20 +28,13 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Determine Mode and Run Pipeline
+      - name: Run Predict Pipeline
         run: |
-          HOUR=$(date -u +%H)
-          if [ "$HOUR" -ge 12 ] && [ "$HOUR" -le 16 ]; then
-            echo "Running Predict Mode..."
-            python cron_mlb.py --mode predict
-          else
-            echo "Running Score Mode..."
-            python cron_mlb.py --mode score
-          fi
+          python cron_mlb.py --mode predict
 
       - name: Commit and Push Changes to GitHub
         run: |
           git config --global user.name "GitHub Actions Bot"
           git config --global user.email "actions@github.com"
-          git add mlb_data.db
-          git diff --quiet && git diff --staged --quiet || (git commit -m "Auto-update mlb_data.db via GitHub Actions Cron" && git push)
+          git add mlb_data.db app.py
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Auto-predict mlb_data.db via GitHub Actions" && git push)
