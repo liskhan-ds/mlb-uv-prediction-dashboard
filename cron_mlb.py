@@ -177,7 +177,7 @@ def run_score(date_str=None):
         home_score = g['teams']['home'].get('score', 0)
         status = g.get('status', {}).get('detailedState', '')
         
-        if status in ['Final', 'Completed']:
+        if status in ['Final', 'Completed', 'Game Over']:
             winner = home if home_score > away_score else away
             actual_games.append((away, home, winner))
         elif status in ['Postponed', 'Cancelled']:
