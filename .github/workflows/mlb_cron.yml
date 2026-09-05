@@ -2,9 +2,9 @@ name: MLB Predict Pipeline
 
 on:
   schedule:
-    # 1) 예측 무인 자동 실행: 23:17 KST (1차) & 23:47 KST (2차 백업)
-    - cron: '17 14 * * *'
-    - cron: '47 14 * * *'
+    # 1) 예측 무인 자동 실행: 21:17 KST (1차) & 21:47 KST (2차 백업)
+    - cron: '17 12 * * *'
+    - cron: '47 12 * * *'
   workflow_dispatch:
 
 permissions:
