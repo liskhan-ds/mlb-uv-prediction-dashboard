@@ -2,9 +2,9 @@ name: MLB Score Pipeline
 
 on:
   schedule:
-    # 2) 경기 결과 무인 자동 채점: 15:17 KST (1차) & 15:47 KST (2차 백업)
-    - cron: '17 6 * * *'
-    - cron: '47 6 * * *'
+    # 2) 경기 결과 무인 자동 채점: 13:17 KST (1차) & 13:47 KST (2차 백업)
+    - cron: '17 4 * * *'
+    - cron: '47 4 * * *'
   workflow_dispatch:
 
 permissions:
