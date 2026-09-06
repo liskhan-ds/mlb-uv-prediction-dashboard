@@ -42,24 +42,12 @@ def load_data():
 
 df = load_data()
 
+from common_nav import render_common_nav
+
 # -----------------------------------------------------------------------------
-# Top Navigation Bar (7 Leagues)
+# Top Navigation Bar
 # -----------------------------------------------------------------------------
-nav_cols = st.columns(7)
-with nav_cols[0]:
-    st.link_button("🏀 NBA ↗", "https://nba-uv-prediction.streamlit.app/", use_container_width=True)
-with nav_cols[1]:
-    st.button("⚾ MLB (Current)", disabled=True, use_container_width=True)
-with nav_cols[2]:
-    st.link_button("⚽ EPL ↗", "https://epl-uv-prediction.streamlit.app/", use_container_width=True)
-with nav_cols[3]:
-    st.link_button("⚽ La Liga ↗", "https://llg-uv-prediction.streamlit.app/", use_container_width=True)
-with nav_cols[4]:
-    st.link_button("🏒 NHL ↗", "https://nhl-uv-prediction.streamlit.app/", use_container_width=True)
-with nav_cols[5]:
-    st.link_button("🏈 NFL ↗", "https://nfl-uv-prediction.streamlit.app/", use_container_width=True)
-with nav_cols[6]:
-    st.link_button("⚽ MLS ↗", "https://mls-uv-prediction.streamlit.app/", use_container_width=True)
+render_common_nav("MLB")
 
 st.divider()
 
