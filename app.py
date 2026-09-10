@@ -11,10 +11,12 @@ import test_mlb_single as engine
 # -----------------------------------------------------------------------------
 st.set_page_config(page_title="MLB AI Match Predictor", page_icon="⚾", layout="wide")
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__)
-
 from common_nav import render_common_nav
 render_common_nav("MLB")
+
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__)
+
 
 )
 DB_PATH = os.path.join(BASE_DIR, "mlb_data.db")
