@@ -1,5 +1,6 @@
 import streamlit as st
 
+# Master US Sports Registry (Soccer Excluded)
 US_SPORTS = [
     {"code": "NBA", "name": "NBA", "icon": "🏀", "url": "https://nba-uv-prediction.streamlit.app/"},
     {"code": "MLB", "name": "MLB", "icon": "⚾", "url": "https://mlb-uv-prediction.streamlit.app/"},
@@ -11,9 +12,14 @@ def render_common_nav(current_league_code: str):
     current_item = next((item for item in US_SPORTS if item["code"] == current_league_code), None)
     current_label = f"{current_item['icon']} {current_item['name']}" if current_item else current_league_code
 
+    if current_item:
+        ordered_items = [current_item] + [item for item in US_SPORTS if item["code"] != current_league_code]
+    else:
+        ordered_items = US_SPORTS
+
     with st.expander(f"📍 League Selector: **{current_label}**", expanded=False):
-        cols = st.columns(len(US_SPORTS))
-        for idx, item in enumerate(US_SPORTS):
+        cols = st.columns(len(ordered_items))
+        for idx, item in enumerate(ordered_items):
             is_current = (item["code"] == current_league_code)
             label = f"{item['icon']} {item['name']}"
             with cols[idx]:
