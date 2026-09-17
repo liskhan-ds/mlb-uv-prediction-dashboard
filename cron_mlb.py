@@ -107,17 +107,12 @@ def run_predict(date_str=None):
         away_expected_score = engine.simulate_9_innings(away_info['lineup_uvs'], home_info)
         home_expected_score = engine.simulate_9_innings(home_info['lineup_uvs'], away_info)
         
+        HOME_BONUS_UV = 0.08
         away_uv = away_info['norm_team_uv']
-        home_uv = home_info['norm_team_uv']
+        home_uv = round(home_info['norm_team_uv'] + HOME_BONUS_UV, 2)
         gap = round(abs(home_uv - away_uv), 2)
         
-        leading = gd['home_team'] if home_uv > away_uv else gd['away_team']
-        if home_expected_score > away_expected_score:
-            pred_winner = gd['home_team']
-        elif away_expected_score > home_expected_score:
-            pred_winner = gd['away_team']
-        else:
-            pred_winner = leading
+        pred_winner = gd['home_team'] if home_uv >= away_uv else gd['away_team']
             
         actual_winner = ''
         is_correct = None

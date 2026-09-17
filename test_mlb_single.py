@@ -440,18 +440,13 @@ def predict_single_game(game_pk=None, date_str="2024-05-20"):
     away_expected_score = simulate_9_innings(away_info["lineup_uvs"], home_info)
     home_expected_score = simulate_9_innings(home_info["lineup_uvs"], away_info)
 
+    HOME_BONUS_UV = 0.08
     away_team_uv = away_info["norm_team_uv"]
-    home_team_uv = home_info["norm_team_uv"]
+    home_team_uv = round(home_info["norm_team_uv"] + HOME_BONUS_UV, 2)
     gap = round(abs(home_team_uv - away_team_uv), 2)
 
-    leading_team = home_team_name if home_team_uv > away_team_uv else away_team_name
-    
-    if home_expected_score > away_expected_score:
-        winner_team = home_team_name
-    elif away_expected_score > home_expected_score:
-        winner_team = away_team_name
-    else:
-        winner_team = leading_team
+    leading_team = home_team_name if home_team_uv >= away_team_uv else away_team_name
+    winner_team = leading_team
 
     return {
         "away_team_name": away_team_name,
